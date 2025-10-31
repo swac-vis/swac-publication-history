@@ -1156,7 +1156,13 @@ class SWACVisualization {
             'from', 'as', 'is', 'are', 'was', 'were', 'be', 'been', 'have', 'has',
             'le', 'la', 'les', 'de', 'des', 'du', 'et', 'en', 'dans', 'pour',
             'sur', 'par', 'avec', 'sans', 'sous', 'entre', 'à',
-            'report', 'summary', 'study', 'note', 'part', 'rapport', 'étude'
+            'report', 'summary', 'study', 'note', 'part', 'rapport', 'étude',
+            // Regions / organizations
+            'sahel', 'africa', 'african', 'afrique', 'ouest', 'oecd', 'swac', 'club',
+            // Months EN
+            'january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december',
+            // Months FR
+            'janvier', 'février', 'fevrier', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'aout', 'septembre', 'octobre', 'novembre', 'décembre', 'decembre'
         ]);
         
         // Combine all titles
@@ -1190,7 +1196,13 @@ class SWACVisualization {
             'from', 'as', 'is', 'are', 'was', 'were', 'be', 'been', 'have', 'has',
             'le', 'la', 'les', 'de', 'des', 'du', 'et', 'en', 'dans', 'pour',
             'sur', 'par', 'avec', 'sans', 'sous', 'entre', 'à',
-            'report', 'summary', 'study', 'note', 'part', 'rapport', 'étude'
+            'report', 'summary', 'study', 'note', 'part', 'rapport', 'étude',
+            // Regions / organizations
+            'sahel', 'africa', 'african', 'afrique', 'ouest', 'oecd', 'swac', 'club',
+            // Months EN
+            'january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december',
+            // Months FR
+            'janvier', 'février', 'fevrier', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'aout', 'septembre', 'octobre', 'novembre', 'décembre', 'decembre'
         ]);
         const allText = publications
             .map(pub => pub.title || '')
