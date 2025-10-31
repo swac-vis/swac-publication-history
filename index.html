@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SWAC Publication History - Storytelling Visualization</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1 class="title">SWAC Publication History</h1>
+            <p class="subtitle">Publications of the Sahel and West Africa Club (1978–2025)</p>
+        </header>
+
+        <!-- Controls Panel -->
+        <div class="controls">
+            <div class="control-group">
+                <label for="dimension-select">Dimension:</label>
+                <select id="dimension-select" class="select-control">
+                    <option value="series" selected>By Series</option>
+                    <option value="topics">By Topics</option>
+                    <option value="type">By Document Type</option>
+                    <option value="author">By Main Author</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <button id="play-btn" class="btn-play">▶ Play Journey</button>
+            </div>
+        </div>
+
+        <!-- Visualization Container -->
+        <div id="viz-container" class="viz-container">
+            <!-- Canvas will be inserted here -->
+        </div>
+
+        <!-- Narrative Overlay -->
+        <div id="narrative" class="narrative hidden">
+            <div class="narrative-content">
+                <h3 id="narrative-title"></h3>
+                <p id="narrative-text"></p>
+                <button class="close-btn">×</button>
+            </div>
+        </div>
+
+        <!-- Publication List Overlay -->
+        <div id="publication-list-overlay" class="publication-list-overlay hidden">
+            <div class="publication-list-content">
+                <h3 id="publication-list-title"></h3>
+                <div id="publication-list-items" class="publication-list-items"></div>
+                <button class="close-btn-publications">×</button>
+            </div>
+        </div>
+
+        <!-- Legend -->
+        <div id="legend" class="legend"></div>
+
+        <!-- Stats Footer -->
+        <div class="stats-footer">
+            <div class="stat-item">
+                <span class="stat-label">Total Publications</span>
+                <span class="stat-value" id="stat-total">0</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Years Spanned</span>
+                <span class="stat-value" id="stat-years">0</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Current Dimension</span>
+                <span class="stat-value" id="stat-dimension">Series</span>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
+
