@@ -340,7 +340,10 @@ function formatLabel(key) {
         'typesCount': 'Types Count',
         'transition': 'Transition',
         'significantIncrease': 'Significant Increase',
-        'topTopics': 'Top Topics'
+        'topTopics': 'Top Topics',
+        'dominantType': 'Dominant Type',
+        'typeDistribution': 'Type Distribution',
+        'typeDistributionByDecade': 'Type Distribution by Decade'
     };
     return labels[key] || key;
 }
@@ -385,6 +388,28 @@ function formatValue(key, value) {
         return Object.entries(value).map(([decade, data]) => 
             `${decade}: ${data.topic} (${data.percentage}%)`
         ).join('; ');
+    }
+    
+    // Handle typeDistribution object (e.g., { "Report": 10, "Note": 5 })
+    if (key === 'typeDistribution' && typeof value === 'object' && value !== null && !Array.isArray(value)) {
+        const entries = Object.entries(value);
+        if (entries.length === 0) return 'N/A';
+        // Sort by count descending and format
+        const sorted = entries.sort((a, b) => b[1] - a[1]);
+        return sorted.map(([type, count]) => `${type}: ${count}`).join(', ');
+    }
+    
+    // Handle typeDistributionByDecade object (e.g., { "1970s": { type: "Report", count: 10 } })
+    if (key === 'typeDistributionByDecade' && typeof value === 'object' && value !== null && !Array.isArray(value)) {
+        const entries = Object.entries(value);
+        if (entries.length === 0) return 'N/A';
+        // Format each decade's dominant type
+        return entries.map(([decade, data]) => {
+            if (data && typeof data === 'object' && data.type && data.count !== undefined) {
+                return `${decade}: ${data.type} (${data.count})`;
+            }
+            return `${decade}: ${JSON.stringify(data)}`;
+        }).join('; ');
     }
     
     return value;
