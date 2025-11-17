@@ -5,11 +5,13 @@ class SWACVisualization {
     constructor(data) {
         this.data = data;
         this.currentDimension = 'series';
+        this.chartType = 'stream'; // 'stream' or 'bar'
         this.isPlaying = false;
         this.currentYear = data.metadata.year_range.min;
         this.selectedStreamKey = null; // Track selected stream by key
         this.selectedCategories = new Set(); // Track selected categories from legend
         this.hoverYear = null; // Track currently hovered year
+        this.filterYearRange = null; // For storytelling: filter to specific year range [min, max]
         
         // Setup
         this.setupSVG();
@@ -26,18 +28,39 @@ class SWACVisualization {
         // Balanced margins and responsive width to fill container
         this.margin = {top: 40, right: 60, bottom: 60, left: 60};
         const container = d3.select('#viz-container').node();
-        const containerWidth = container ? container.getBoundingClientRect().width : 1200;
+        
+        // Check if container exists and has dimensions
+        if (!container) {
+            console.error('Visualization container not found');
+            return;
+        }
+        
+        // Get container width - retry if width is 0 (container might not be laid out yet)
+        let containerWidth = container.getBoundingClientRect().width;
+        if (containerWidth === 0) {
+            // Container might not be laid out yet, try to get parent width
+            const parent = container.parentElement;
+            if (parent) {
+                containerWidth = parent.getBoundingClientRect().width || 1200;
+            } else {
+                containerWidth = 1200; // Fallback
+            }
+        }
+        
         this.width = Math.max(300, containerWidth - this.margin.left - this.margin.right);
         this.height = 600 - this.margin.top - this.margin.bottom;
         
-        // Clear container
-        d3.select('#viz-container').selectAll('*').remove();
+        // Clear container (including loading text) - use html('') to remove all content
+        const vizContainer = d3.select('#viz-container');
+        vizContainer.html(''); // This removes the "Loading data..." text
         
         // Create SVG
-        this.svg = d3.select('#viz-container')
+        this.svg = vizContainer
             .append('svg')
             .attr('width', this.width + this.margin.left + this.margin.right)
-            .attr('height', this.height + this.margin.top + this.margin.bottom);
+            .attr('height', this.height + this.margin.top + this.margin.bottom)
+            .attr('viewBox', `0 0 ${this.width + this.margin.left + this.margin.right} ${this.height + this.margin.top + this.margin.bottom}`)
+            .attr('preserveAspectRatio', 'xMidYMid meet');
         
         // Main group
         this.g = this.svg.append('g')
@@ -98,6 +121,17 @@ class SWACVisualization {
                 this.updateVisualization(true); // Clear categories on dimension change
                 this.updateStats();
             });
+        
+        // Chart type selector (if exists)
+        const chartTypeSelect = d3.select('#chart-type-select');
+        if (!chartTypeSelect.empty()) {
+            chartTypeSelect
+                .on('change', () => {
+                    this.chartType = chartTypeSelect.property('value');
+                    this.updateVisualization(true);
+                    this.updateStats();
+                });
+        }
         
         // Play button
         d3.select('#play-btn')
@@ -284,8 +318,10 @@ class SWACVisualization {
     // Prepare data based on selected dimension
     prepareData() {
         const dimension = this.currentDimension;
-        // Use metadata year range so the axis and data extend to declared bounds
-        const yearRange = this.data.metadata.year_range;
+        // Use filterYearRange if set (for storytelling), otherwise use metadata year range
+        const yearRange = this.filterYearRange 
+            ? { min: this.filterYearRange[0], max: this.filterYearRange[1] }
+            : this.data.metadata.year_range;
         const years = d3.range(yearRange.min, yearRange.max + 1);
         
         let dimensionValues = [];
@@ -297,7 +333,15 @@ class SWACVisualization {
         });
         
         // Collect all unique values for this dimension
-        this.data.publications.forEach(pub => {
+        // Filter publications by year range if filterYearRange is set
+        const filteredPublications = this.filterYearRange
+            ? this.data.publications.filter(pub => 
+                pub.year >= this.filterYearRange[0] && pub.year <= this.filterYearRange[1]
+            )
+            : this.data.publications;
+        
+        filteredPublications.forEach(pub => {
+            // Publications are already filtered by year range, so we can process them directly
             let value = null;
             
             switch(dimension) {
@@ -386,13 +430,346 @@ class SWACVisualization {
         return {stackedData, topValues, allTopValues, totalsLookup};
     }
     
+    // Create bar chart
+    createBarChart() {
+        const {stackedData, topValues, allTopValues, totalsLookup} = this.prepareData();
+        
+        // Use filterYearRange if set (for storytelling), otherwise use metadata year range
+        const yearRange = this.filterYearRange 
+            ? { min: this.filterYearRange[0], max: this.filterYearRange[1] }
+            : this.data.metadata.year_range;
+        
+        // Recreate xScale using the determined year range
+        this.xScale = d3.scaleBand()
+            .domain(stackedData.map(d => d.year))
+            .range([0, this.width])
+            .padding(0.1);
+        
+        // Store totals lookup for tooltips
+        this.totalsLookup = totalsLookup;
+        this.allTopValues = allTopValues; // Store for legend
+        
+        // Stack generator for stacked bars
+        const stack = d3.stack()
+            .keys(topValues)
+            .order(d3.stackOrderNone)
+            .offset(d3.stackOffsetNone); // Stack from zero
+        
+        const series = stack(stackedData);
+        
+        // Y scale: from 0 to max
+        const yMax = d3.max(series, d => d3.max(d, d => d[1]));
+        
+        this.yScale = d3.scaleLinear()
+            .domain([0, yMax])
+            .range([this.height, 0]);
+        
+        // Remove old bars and labels, and all stream graph elements
+        this.g.selectAll('.bar-group').remove();
+        this.g.selectAll('.bar').remove();
+        this.g.selectAll('.bar-label').remove();
+        this.g.selectAll('.bar-keyword').remove();
+        this.g.selectAll('.stream-area').remove();
+        this.g.selectAll('.stream-label').remove();
+        this.g.selectAll('.stream-keyword').remove();
+        
+        // Also remove from SVG container directly as a safety measure
+        if (this.svg) {
+            this.svg.selectAll('.bar-group').remove();
+            this.svg.selectAll('.bar').remove();
+            this.svg.selectAll('.bar-label').remove();
+            this.svg.selectAll('.bar-keyword').remove();
+            this.svg.selectAll('.stream-area').remove();
+            this.svg.selectAll('.stream-label').remove();
+            this.svg.selectAll('.stream-keyword').remove();
+        }
+        
+        // Create color scale
+        const colorScale = this.colorScales[this.currentDimension];
+        
+        // Build index map for colors based on allTopValues
+        const colorIndexMap = {};
+        this.allTopValues.forEach((val, i) => {
+            colorIndexMap[val] = i;
+        });
+        
+        // Create groups for each year
+        const barGroups = this.g.selectAll('.bar-group')
+            .data(stackedData)
+            .enter()
+            .append('g')
+            .attr('class', 'bar-group')
+            .attr('transform', d => `translate(${this.xScale(d.year)}, 0)`);
+        
+        // Create bars for each series
+        const bars = barGroups.selectAll('.bar')
+            .data(d => {
+                // Map data to series format
+                return series.map(s => {
+                    const seriesData = s.find(item => item.data.year === d.year);
+                    if (!seriesData) return null;
+                    return {
+                        key: s.key,
+                        y0: seriesData[0],
+                        y1: seriesData[1],
+                        data: d,
+                        value: seriesData[1] - seriesData[0]
+                    };
+                }).filter(d => d !== null);
+            })
+            .enter()
+            .append('rect')
+            .attr('class', 'bar')
+            .attr('x', 0)
+            .attr('width', this.xScale.bandwidth())
+            .attr('y', d => this.yScale(d.y1))
+            .attr('height', d => {
+                const height = this.yScale(d.y0) - this.yScale(d.y1);
+                return height > 0 ? height : 0;
+            })
+            .attr('fill', d => colorScale(colorIndexMap[d.key]))
+            .attr('stroke', '#efe7d7')
+            .attr('stroke-width', 0.5)
+            .attr('opacity', d => {
+                // Dim unselected categories
+                if (this.selectedCategories.size > 0 && !this.selectedCategories.has(d.key)) {
+                    return 0.3;
+                }
+                return d.key === this.selectedStreamKey ? 1 : 0.85;
+            })
+            .on('mouseenter', (event, d) => {
+                d3.select(event.currentTarget)
+                    .transition()
+                    .duration(200)
+                    .attr('opacity', 1)
+                    .attr('stroke-width', 2);
+                
+                // Show tooltip - create a point-like object for compatibility
+                const value = d.value;
+                const point = {
+                    data: {
+                        year: d.data.year,
+                        [d.key]: value
+                    }
+                };
+                
+                this.showTooltip(event, point, d.key);
+            })
+            .on('mouseleave', (event, d) => {
+                const streamKey = d.key;
+                if (this.selectedStreamKey !== streamKey) {
+                    d3.select(event.currentTarget)
+                        .transition()
+                        .duration(200)
+                        .attr('opacity', d => {
+                            if (this.selectedCategories.size > 0 && !this.selectedCategories.has(d.key)) {
+                                return 0.3;
+                            }
+                            return 0.85;
+                        })
+                        .attr('stroke-width', 0.5);
+                }
+                
+                this.hideTooltip();
+            })
+            .on('click', (event, d) => {
+                event.stopPropagation();
+                const streamKey = d.key;
+                
+                // Toggle selection
+                if (this.selectedStreamKey === streamKey) {
+                    this.selectedStreamKey = null;
+                    // Update all bars to normal opacity
+                    this.g.selectAll('.bar')
+                        .transition()
+                        .duration(200)
+                        .attr('opacity', d => {
+                            if (this.selectedCategories.size > 0 && !this.selectedCategories.has(d.key)) {
+                                return 0.3;
+                            }
+                            return 0.85;
+                        });
+                } else {
+                    this.selectedStreamKey = streamKey;
+                    // Highlight selected stream
+                    this.g.selectAll('.bar')
+                        .transition()
+                        .duration(200)
+                        .attr('opacity', d => {
+                            if (this.selectedCategories.size > 0 && !this.selectedCategories.has(d.key)) {
+                                return 0.3;
+                            }
+                            return d.key === streamKey ? 1 : 0.5;
+                        });
+                }
+            })
+            .on('dblclick', (event, d) => {
+                event.stopPropagation();
+                this.showPublicationList(d.key, d.data.year);
+            })
+            .style('cursor', 'pointer');
+        
+        // Add keywords on bars
+        this.addBarKeywords(barGroups, stackedData, topValues, series);
+    }
+    
+    // Add keywords on bar chart
+    addBarKeywords(barGroups, stackedData, topValues, series) {
+        // Place keywords at exact (category, year) positions on bars
+        const publicationsByYear = this.data.publications_by_year;
+        const yearRange = this.filterYearRange 
+            ? { min: this.filterYearRange[0], max: this.filterYearRange[1] }
+            : this.data.metadata.year_range;
+        const currentDimension = this.currentDimension;
+        const g = this.g;
+        const vis = this;
+        const placedBoxes = [];
+        const PADDING = 4;
+        
+        // Helper function to check overlap
+        function intersects(a, b, pad) {
+            return !(
+                a.x + a.width + pad <= b.x ||
+                b.x + b.width + pad <= a.x ||
+                a.y + a.height + pad <= b.y ||
+                b.y + b.height + pad <= a.y
+            );
+        }
+        
+        // Iterate over each year's bar groups
+        barGroups.each(function(barGroupData) {
+            const year = barGroupData.year;
+            const yearStr = String(year);
+            const yearPubs = publicationsByYear[yearStr] || [];
+            
+            // Get the x position of this bar group (year position)
+            const barGroupX = vis.xScale(year);
+            const barWidth = vis.xScale.bandwidth();
+            
+            // Get all bars in this year group
+            const bars = d3.select(this).selectAll('.bar');
+            
+            bars.each(function(barData) {
+                const category = barData.key;
+                
+                // Filter publications to match current category and dimension
+                const matchedPubs = yearPubs.filter(pub => {
+                    switch (currentDimension) {
+                        case 'series':
+                            return pub.series === category;
+                        case 'topics':
+                            return pub.topics && pub.topics.includes(category);
+                        case 'type':
+                            return pub.type === category;
+                        case 'author':
+                            return pub.author && pub.author.split(',').map(a => a.trim()).includes(category);
+                        default:
+                            return false;
+                    }
+                });
+                
+                if (matchedPubs.length === 0) return;
+                
+                // Extract keyword counts for this (category, year)
+                const keywordStats = vis.extractKeywordCountsFromTitles(matchedPubs);
+                if (keywordStats.sorted.length === 0) return;
+                
+                const topEntry = keywordStats.sorted[0];
+                const keyword = topEntry.word;
+                const kCount = topEntry.count;
+                
+                // Calculate bar position and dimensions
+                const barNode = d3.select(this);
+                const barY = parseFloat(barNode.attr('y')) || 0;
+                const barHeight = parseFloat(barNode.attr('height')) || 0;
+                
+                // Skip if bar is too small
+                if (barHeight < 15 || barWidth < 20) return;
+                
+                // Calculate center position of the bar
+                // barX is 0 relative to barGroup, so add barGroupX
+                const x = barGroupX + barWidth / 2;
+                const y = barY + barHeight / 2;
+                
+                // Create text element to measure
+                const text = g.append('text')
+                    .attr('class', 'bar-keyword')
+                    .attr('x', x)
+                    .attr('y', y)
+                    .attr('text-anchor', 'middle')
+                    .attr('dy', '0.35em')
+                    .attr('fill', '#ffffff')
+                    .attr('stroke', 'rgba(0,0,0,0.5)')
+                    .attr('stroke-width', 1.5)
+                    .attr('paint-order', 'stroke fill')
+                    .attr('font-size', () => {
+                        // Scale font size based on keyword count and bar size
+                        const minCount = Math.max(1, keywordStats.min);
+                        const maxCount = Math.max(minCount + 1, keywordStats.max);
+                        const t = (kCount - minCount) / (maxCount - minCount);
+                        const baseSize = 9 + t * 8; // 9px to 17px
+                        // Cap by bar dimensions
+                        const maxSizeByHeight = Math.max(8, Math.min(17, barHeight * 0.4));
+                        const maxSizeByWidth = Math.max(8, Math.min(17, barWidth / (keyword.length + 2)));
+                        return Math.min(baseSize, maxSizeByHeight, maxSizeByWidth);
+                    })
+                    .attr('font-weight', '500')
+                    .style('opacity', 0)
+                    .text(keyword);
+                
+                try {
+                    const bbox = text.node().getBBox();
+                    const candidate = {
+                        x: bbox.x - PADDING,
+                        y: bbox.y - PADDING,
+                        width: bbox.width + PADDING * 2,
+                        height: bbox.height + PADDING * 2
+                    };
+                    
+                    // Check if text fits within bar bounds
+                    const textLeft = x - bbox.width / 2;
+                    const textRight = x + bbox.width / 2;
+                    const textTop = y - bbox.height / 2;
+                    const textBottom = y + bbox.height / 2;
+                    
+                    const fitsInBar = textLeft >= barGroupX && 
+                                     textRight <= barGroupX + barWidth &&
+                                     textTop >= barY && 
+                                     textBottom <= barY + barHeight;
+                    
+                    if (!fitsInBar) {
+                        text.remove();
+                        return;
+                    }
+                    
+                    // Check for overlap with other keywords
+                    const hasOverlap = placedBoxes.some(box => intersects(box, candidate, PADDING));
+                    
+                    if (hasOverlap) {
+                        text.remove();
+                    } else {
+                        placedBoxes.push(candidate);
+                        text.style('opacity', 0.9);
+                    }
+                } catch (e) {
+                    text.remove();
+                }
+            });
+        });
+    }
+    
     // Create stream graph
     createStreamGraph() {
         const {stackedData, topValues, allTopValues, totalsLookup} = this.prepareData();
         
-        // Recreate xScale using metadata year range (e.g., to 2025)
+        // Use filterYearRange if set (for storytelling), otherwise use metadata year range
+        const yearRange = this.filterYearRange 
+            ? { min: this.filterYearRange[0], max: this.filterYearRange[1] }
+            : this.data.metadata.year_range;
+        
+        // Recreate xScale using the determined year range
         this.xScale = d3.scaleLinear()
-            .domain([this.data.metadata.year_range.min, this.data.metadata.year_range.max])
+            .domain([yearRange.min, yearRange.max])
             .range([0, this.width]);
         
         // Store totals lookup for tooltips
@@ -424,10 +801,23 @@ class SWACVisualization {
             .y1(d => this.yScale(d[1]))
             .curve(d3.curveCatmullRom.alpha(0.5)); // Smooth curves
         
-        // Remove old paths
+        // Remove old paths and all bar chart elements
         this.g.selectAll('.stream-area').remove();
         this.g.selectAll('.stream-label').remove();
         this.g.selectAll('.stream-keyword').remove();
+        this.g.selectAll('.bar-group').remove();
+        this.g.selectAll('.bar').remove();
+        this.g.selectAll('.bar-label').remove();
+        
+        // Also remove from SVG container directly as a safety measure
+        if (this.svg) {
+            this.svg.selectAll('.bar-group').remove();
+            this.svg.selectAll('.bar').remove();
+            this.svg.selectAll('.bar-label').remove();
+            this.svg.selectAll('.stream-area').remove();
+            this.svg.selectAll('.stream-label').remove();
+            this.svg.selectAll('.stream-keyword').remove();
+        }
         
         // Create paths
         const colorScale = this.colorScales[this.currentDimension];
@@ -536,37 +926,168 @@ class SWACVisualization {
     addAxes() {
         // Remove old axes
         this.g.selectAll('.axis').remove();
-        
-        // X axis
-        const xAxis = d3.axisBottom(this.xScale)
-            .ticks(12)
-            .tickFormat(d3.format('d'));
-        
-        this.g.append('g')
-            .attr('class', 'axis')
-            .attr('transform', `translate(0,${this.height})`)
-            .call(xAxis)
-            .selectAll('text')
-            .style('fill', '#666')
-            .style('font-size', '11px');
-        
-        // Grid lines
         this.g.selectAll('.grid-line').remove();
+        this.g.selectAll('.year-marker').remove();
         
-        const gridLines = this.g.selectAll('.grid-line')
-            .data(this.xScale.ticks(12))
-            .enter()
-            .append('g');
+        // Determine year range for axis ticks
+        const yearRange = this.filterYearRange 
+            ? { min: this.filterYearRange[0], max: this.filterYearRange[1] }
+            : this.data.metadata.year_range;
         
-        gridLines.append('line')
-            .attr('class', 'year-marker')
-            .attr('x1', d => this.xScale(d))
-            .attr('x2', d => this.xScale(d))
-            .attr('y1', 0)
-            .attr('y2', this.height);
+        // Check if xScale is scaleBand (bar chart) or scaleLinear (stream graph)
+        const isBarChart = this.chartType === 'bar' && this.xScale && this.xScale.bandwidth;
         
-        // Add key event markers
-        this.addKeyEventMarkers();
+        if (isBarChart) {
+            // For bar chart: filter to only show years ending in 0 or 5
+            const allYears = this.xScale.domain(); // Get all years in the domain
+            const yearRangeMin = yearRange.min;
+            const yearRangeMax = yearRange.max;
+            
+            // Generate tick values - only years ending in 0 or 5 that exist in the domain
+            const tickValues = [];
+            
+            // Find the first year ending in 0 or 5 that is >= yearRangeMin
+            let startYear = yearRangeMin;
+            while (startYear <= yearRangeMax) {
+                const lastDigit = startYear % 10;
+                if (lastDigit === 0 || lastDigit === 5) {
+                    break; // Found first year ending in 0 or 5
+                }
+                startYear++;
+            }
+            
+            // Generate ticks: only years ending in 0 or 5 that exist in the domain
+            for (let year = startYear; year <= yearRangeMax; year++) {
+                const lastDigit = year % 10;
+                if ((lastDigit === 0 || lastDigit === 5) && allYears.includes(year)) {
+                    tickValues.push(year);
+                }
+            }
+            
+            // Always include min and max years if they exist in domain and don't end in 0 or 5
+            if (allYears.includes(yearRangeMin) && yearRangeMin % 10 !== 0 && yearRangeMin % 10 !== 5) {
+                if (!tickValues.includes(yearRangeMin)) {
+                    tickValues.unshift(yearRangeMin);
+                }
+            }
+            if (allYears.includes(yearRangeMax) && yearRangeMax % 10 !== 0 && yearRangeMax % 10 !== 5) {
+                if (!tickValues.includes(yearRangeMax)) {
+                    tickValues.push(yearRangeMax);
+                }
+            }
+            
+            // Sort tick values
+            tickValues.sort((a, b) => a - b);
+            
+            // For bar chart: use scaleBand axis with filtered tick values
+            const xAxis = d3.axisBottom(this.xScale)
+                .tickValues(tickValues.length > 0 ? tickValues : allYears) // Fallback to all years if no filtered years
+                .tickFormat(d3.format('d'));
+            
+            this.g.append('g')
+                .attr('class', 'axis x-axis')
+                .attr('transform', `translate(0, ${this.height})`)
+                .call(xAxis)
+                .selectAll('text')
+                .style('text-anchor', 'middle')
+                .style('fill', '#6b665e')
+                .style('font-size', '12px');
+        } else {
+            // For stream graph: use scaleLinear axis with custom ticks
+            // Generate tick values - only years ending in 0 or 5 (e.g., 1980, 1985, 1990)
+            const tickValues = [];
+            const yearRangeMin = yearRange.min;
+            const yearRangeMax = yearRange.max;
+            
+            // Find the first year ending in 0 or 5 that is >= yearRangeMin
+            let startYear = yearRangeMin;
+            while (startYear <= yearRangeMax) {
+                const lastDigit = startYear % 10;
+                if (lastDigit === 0 || lastDigit === 5) {
+                    break; // Found first year ending in 0 or 5
+                }
+                startYear++;
+            }
+            
+            // Generate ticks: only years ending in 0 or 5
+            for (let year = startYear; year <= yearRangeMax; year++) {
+                const lastDigit = year % 10;
+                if (lastDigit === 0 || lastDigit === 5) {
+                    tickValues.push(year);
+                }
+            }
+            
+            // Always include min and max years if they don't end in 0 or 5
+            if (yearRangeMin % 10 !== 0 && yearRangeMin % 10 !== 5) {
+                if (!tickValues.includes(yearRangeMin)) {
+                    tickValues.unshift(yearRangeMin);
+                }
+            }
+            if (yearRangeMax % 10 !== 0 && yearRangeMax % 10 !== 5) {
+                if (!tickValues.includes(yearRangeMax)) {
+                    tickValues.push(yearRangeMax);
+                }
+            }
+            
+            // Sort tick values
+            tickValues.sort((a, b) => a - b);
+            
+            // X axis - only show years ending in 0 or 5
+            const xAxis = d3.axisBottom(this.xScale)
+                .tickValues(tickValues)
+                .tickFormat(d3.format('d'));
+            
+            this.g.append('g')
+                .attr('class', 'axis')
+                .attr('transform', `translate(0,${this.height})`)
+                .call(xAxis)
+                .selectAll('text')
+                .style('fill', '#666')
+                .style('font-size', '11px');
+            
+            // Grid lines - remove all old grid lines and year markers first
+            this.g.selectAll('.grid-line').remove();
+            this.g.selectAll('.year-marker').remove();
+            
+            // Also remove from SVG container directly as a safety measure
+            if (this.svg) {
+                this.svg.selectAll('.grid-line').remove();
+                this.svg.selectAll('.year-marker').remove();
+            }
+            
+            // Create new grid lines for each tick value (vertical dashed lines)
+            tickValues.forEach(year => {
+                const x = this.xScale(year);
+                // Skip if x is outside the visualization bounds
+                if (x < 0 || x > this.width) return;
+                
+                this.g.append('line')
+                    .attr('class', 'year-marker grid-line')
+                    .attr('x1', x)
+                    .attr('x2', x)
+                    .attr('y1', 0)
+                    .attr('y2', this.height)
+                    .style('stroke', '#e3dccb')
+                    .style('stroke-dasharray', '3,3')
+                    .style('stroke-width', 1)
+                    .style('pointer-events', 'none')
+                    .style('opacity', 0.6);
+            });
+        }
+        
+        // Y axis - only for bar chart
+        if (isBarChart) {
+            const yAxis = d3.axisLeft(this.yScale)
+                .ticks(8)
+                .tickFormat(d3.format('d'));
+            
+            this.g.append('g')
+                .attr('class', 'axis y-axis')
+                .call(yAxis)
+                .selectAll('text')
+                .style('fill', '#6b665e')
+                .style('font-size', '12px');
+        }
     }
     
     // Detect and mark key events (peaks, first appearances, dramatic changes)
@@ -696,21 +1217,65 @@ class SWACVisualization {
     
     // Add visual markers for key events on timeline
     addKeyEventMarkers() {
-        // Remove old markers
+        // Remove old markers and all event-related elements (important for storytelling)
         this.g.selectAll('.event-marker').remove();
-        this.g.selectAll('.event-annotation').remove();
         this.g.selectAll('.event-leader').remove();
+        this.g.selectAll('.event-callout').remove();
+        
+        // Also remove from SVG container directly as a safety measure
+        if (this.svg) {
+            this.svg.selectAll('.event-marker').remove();
+            this.svg.selectAll('.event-leader').remove();
+            this.svg.selectAll('.event-callout').remove();
+        }
         
         const events = this.detectKeyEvents();
         if (events.length === 0) return;
         
+        // Get current year range (from filterYearRange or metadata)
+        const yearRange = this.filterYearRange 
+            ? { min: this.filterYearRange[0], max: this.filterYearRange[1] }
+            : this.data.metadata.year_range;
+        const yearRangeMin = yearRange.min;
+        const yearRangeMax = yearRange.max;
+        
         // Top time band baseline (slightly above chart)
         const bandY = -14;
         
+        // Get visualization bounds to prevent markers from going outside
+        const margin = 10;
+        const minX = margin;
+        const maxX = this.width - margin;
+        
+        // Check if xScale is scaleBand (bar chart) or scaleLinear (stream graph)
+        const isBarChart = this.chartType === 'bar' && this.xScale && this.xScale.bandwidth;
+        
         events.forEach((event, i) => {
-            const x = this.xScale(event.year);
+            // Only show events within the current year range
+            if (event.year < yearRangeMin || event.year > yearRangeMax) {
+                return;
+            }
             
-            // Leader line from top of plot to band
+            // Calculate x position based on chart type
+            let x;
+            if (isBarChart) {
+                // For bar chart: center of the bar for this year
+                const yearBand = this.xScale(event.year);
+                if (yearBand === undefined) return; // Year not in domain
+                x = yearBand + this.xScale.bandwidth() / 2;
+            } else {
+                // For stream graph: direct mapping
+                x = this.xScale(event.year);
+            }
+            
+            // Clamp x position to visualization bounds
+            x = Math.max(minX, Math.min(maxX, x));
+            
+            // Skip if event is outside visible range
+            if (x < minX || x > maxX) return;
+            
+            // Leader line from top of chart area to band (above chart)
+            // Both chart types: line starts from top (y=0) and extends upward to band
             this.g.append('line')
                 .attr('class', 'event-leader')
                 .attr('x1', x)
@@ -734,13 +1299,29 @@ class SWACVisualization {
                 .style('cursor', 'default')
                 .style('opacity', 0.85)
                 .on('mouseenter', () => {
-                    // Remove existing callouts
+                    // Remove existing callouts first
                     this.g.selectAll('.event-callout').remove();
+                    if (this.svg) {
+                        this.svg.selectAll('.event-callout').remove();
+                    }
                     
                     // Build inline callout next to the dot
                     const callout = this.g.append('g')
                         .attr('class', 'event-callout');
-                    const px = x + 8;
+                    
+                    // Calculate callout position - try right side first, then left if needed
+                    const calloutText = `${event.year} · ${event.message}`;
+                    const estimatedTextWidth = calloutText.length * 5.5; // Rough estimate
+                    const calloutWidth = estimatedTextWidth + 20;
+                    
+                    let px = x + 8; // Try right side first
+                    // If callout would go beyond right edge, place on left side
+                    if (px + calloutWidth > maxX) {
+                        px = x - calloutWidth - 8; // Place on left side
+                    }
+                    // Ensure callout doesn't go beyond left edge
+                    px = Math.max(minX, px);
+                    
                     const py = bandY - 16;
                     const text = callout.append('text')
                         .attr('x', px + 8)
@@ -748,7 +1329,8 @@ class SWACVisualization {
                         .attr('dominant-baseline', 'hanging')
                         .attr('font-size', '10px')
                         .attr('fill', '#2b2b2b')
-                        .text(`${event.year} · ${event.message}`);
+                        .text(calloutText);
+                    
                     // Background
                     const bbox = text.node().getBBox();
                     callout.insert('rect', 'text')
@@ -764,20 +1346,15 @@ class SWACVisualization {
                         .attr('opacity', 0.98);
                 })
                 .on('mouseleave', () => {
+                    // Remove callouts when mouse leaves
                     this.g.selectAll('.event-callout').remove();
+                    if (this.svg) {
+                        this.svg.selectAll('.event-callout').remove();
+                    }
                 });
             
-            // Year label near marker (sparse)
-            if (i % 2 === 0) {
-                this.g.append('text')
-                    .attr('class', 'event-annotation')
-                    .attr('x', x)
-                    .attr('y', bandY - 6)
-                    .attr('text-anchor', 'middle')
-                    .attr('font-size', '9px')
-                    .attr('fill', '#6b665e')
-                    .text(event.year);
-            }
+            // Year labels are not displayed - users can hover over markers to see event details
+            // All event information (including year) is available in the tooltip on hover
         });
     }
     
@@ -993,11 +1570,36 @@ class SWACVisualization {
         // Clear corner year when not playing
         if (!this.isPlaying && this.cornerYear) this.cornerYear.text('');
         
-        this.createStreamGraph();
+        // Clear all chart elements before creating new visualization
+        // This ensures clean switching between chart types
+        this.g.selectAll('.stream-area').remove();
+        this.g.selectAll('.stream-label').remove();
+        this.g.selectAll('.stream-keyword').remove();
+        this.g.selectAll('.bar-group').remove();
+        this.g.selectAll('.bar').remove();
+        this.g.selectAll('.bar-label').remove();
+        
+        // Also remove from SVG container directly as a safety measure
+        if (this.svg) {
+            this.svg.selectAll('.bar-group').remove();
+            this.svg.selectAll('.bar').remove();
+            this.svg.selectAll('.bar-label').remove();
+            this.svg.selectAll('.stream-area').remove();
+            this.svg.selectAll('.stream-label').remove();
+            this.svg.selectAll('.stream-keyword').remove();
+        }
+        
+        // Create visualization based on chart type
+        if (this.chartType === 'bar') {
+            this.createBarChart();
+        } else {
+            this.createStreamGraph();
+        }
+        
         this.addAxes();
         this.updateLegend();
         
-        // Re-add key event markers after visualization update
+        // Re-add key event markers after visualization update (for both chart types)
         if (this.xScale) {
             this.addKeyEventMarkers();
         }
@@ -1365,21 +1967,43 @@ class SWACVisualization {
 }
 
 // Initialize visualization when data is loaded
-let data;
-let viz;
+// Only auto-initialize if we're on the main index page (not storytelling page)
+// Use window namespace to avoid conflicts with storytelling.js
 
-// Load data
-d3.json('swac_data.json')
-    .then(loadedData => {
-        data = loadedData;
-        viz = new SWACVisualization(data);
-        
-        // Add loading indicator removal
-        d3.select('#viz-container').select('.loading')?.remove();
-    })
-    .catch(error => {
-        console.error('Error loading data:', error);
-        d3.select('#viz-container')
-            .html('<div class="loading">Error loading data. Please check if swac_data.json exists.</div>');
-    });
+(function() {
+    'use strict';
+    
+    // Check if we should auto-initialize (only on index.html, not storytelling.html)
+    function initializeViz() {
+        // Only initialize if this is the main index page (has dimension-select)
+        if (document.getElementById('dimension-select')) {
+            // This is index.html - auto-initialize
+            d3.json('swac_data.json')
+                .then(loadedData => {
+                    // Store in window namespace
+                    window.data = loadedData;
+                    window.viz = new SWACVisualization(loadedData);
+                    
+                    // Add loading indicator removal
+                    d3.select('#viz-container').select('.loading')?.remove();
+                })
+                .catch(error => {
+                    console.error('Error loading data:', error);
+                    d3.select('#viz-container')
+                        .html('<div class="loading">Error loading data. Please check if swac_data.json exists.</div>');
+                });
+        } else {
+            // This is storytelling.html - don't auto-initialize
+            // The storytelling.js will handle initialization
+            console.log('Storytelling page detected - skipping auto-initialization');
+        }
+    }
+    
+    // Wait for DOM to be ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializeViz);
+    } else {
+        initializeViz();
+    }
+})();
 

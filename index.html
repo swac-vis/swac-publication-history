@@ -10,8 +10,15 @@
     <div class="container">
         <!-- Header -->
         <header class="header">
-            <h1 class="title">SWAC Publication History</h1>
-            <p class="subtitle">Publications of the Sahel and West Africa Club (1978–2025)</p>
+            <div class="header-content">
+                <div class="header-title">
+                    <h1 class="title">SWAC Publication History</h1>
+                    <p class="subtitle">Publications of the Sahel and West Africa Club (1978–2025)</p>
+                </div>
+                <div class="header-nav">
+                    <a href="storytelling.html" class="nav-link">Data Story →</a>
+                </div>
+            </div>
         </header>
 
         <!-- Controls Panel -->
@@ -23,6 +30,14 @@
                     <option value="topics">By Topics</option>
                     <option value="type">By Document Type</option>
                     <option value="author">By Main Author</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label for="chart-type-select">Chart Type:</label>
+                <select id="chart-type-select" class="select-control">
+                    <option value="stream" selected>Theme River (Stream)</option>
+                    <option value="bar">Bar Chart</option>
                 </select>
             </div>
 

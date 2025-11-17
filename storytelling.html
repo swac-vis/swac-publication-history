@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SWAC Publication History - Data Story</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        /* Header sticky styles */
+        .header {
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            background: #f5f0e6;
+            padding: 20px 0;
+            margin-bottom: 2rem;
+            border-bottom: 1px solid #e3dccb;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+        
+        .header-content {
+            position: relative;
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .header-title {
+            text-align: center;
+            flex: 0 0 auto;
+        }
+        
+        .header-nav {
+            position: absolute;
+            top: 50%;
+            right: 20px;
+            transform: translateY(-50%);
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .nav-link {
+            display: inline-block;
+            padding: 4px 8px;
+            background: transparent;
+            border: none;
+            color: #8c6d5a;
+            text-decoration: none;
+            font-size: 0.75rem;
+            font-weight: 300;
+            transition: color 0.2s ease;
+            white-space: nowrap;
+            opacity: 0.6;
+            letter-spacing: 0.01em;
+        }
+        
+        .nav-link:hover {
+            color: #2b2b2b;
+            opacity: 1;
+        }
+        
+        .nav-link:active {
+            color: #6b665e;
+            opacity: 0.8;
+        }
+        
+        /* Scrollytelling specific styles */
+        .scrollytelling-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 3rem;
+            min-height: calc(100vh - 120px); /* Account for header height */
+            align-items: start;
+        }
+
+        .visualization-sticky {
+            position: sticky;
+            top: 120px; /* Position below sticky header */
+            height: calc(100vh - 120px); /* Adjust height to account for header */
+            overflow: visible;
+            background: transparent;
+        }
+
+        #viz-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px 0;
+        }
+        
+        #viz-container svg {
+            background: transparent;
+        }
+
+        .scroll-sections {
+            padding: 2rem 0;
+        }
+
+        .step {
+            min-height: 100vh;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            opacity: 0.3;
+            transition: opacity 0.3s;
+        }
+
+        .step.active {
+            opacity: 1;
+        }
+
+        .step-content {
+            max-width: 600px;
+        }
+
+        .step-title {
+            font-size: 2rem;
+            font-weight: 300;
+            color: #2b2b2b;
+            margin-bottom: 1rem;
+            letter-spacing: 0.04em;
+        }
+
+        .step-narrative {
+            font-size: 1.1rem;
+            line-height: 1.8;
+            color: #555;
+            margin-bottom: 1.5rem;
+        }
+
+        .data-points {
+            margin-top: 1.5rem;
+            padding: 1.5rem;
+            background: #f5f0e6;
+            border-radius: 8px;
+            border: 1px solid #e3dccb;
+        }
+
+        .data-point {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #e3dccb;
+        }
+
+        .data-point:last-child {
+            border-bottom: none;
+        }
+
+        .data-point-label {
+            font-weight: 500;
+            color: #666;
+        }
+
+        .data-point-value {
+            font-weight: 600;
+            color: #2b2b2b;
+        }
+
+        .year-indicator {
+            display: none; /* Hide year indicator - year range is shown in step titles */
+        }
+
+        /* Tablet and mobile responsive */
+        @media (max-width: 1024px) {
+            .header {
+                padding: 15px 0;
+            }
+            
+            .scrollytelling-container {
+                grid-template-columns: 1fr;
+                gap: 2rem;
+                min-height: auto;
+            }
+
+            .visualization-sticky {
+                position: relative;
+                top: 0;
+                height: auto;
+                min-height: 400px;
+                margin-bottom: 2rem;
+            }
+            
+            .year-indicator {
+                position: relative;
+                top: 0;
+                margin-bottom: 10px;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .header {
+                padding: 12px 0;
+            }
+            
+            .title {
+                font-size: 1.5rem;
+            }
+            
+            .subtitle {
+                font-size: 0.85rem;
+            }
+            
+            .visualization-sticky {
+                min-height: 350px;
+            }
+            
+            .step {
+                min-height: auto;
+                padding: 1.5rem 1rem;
+            }
+
+            .step-title {
+                font-size: 1.5rem;
+            }
+        }
+
+        /* Loading state */
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #999;
+            font-size: 1.1rem;
+        }
+        
+        /* Chart type toggle - floating button in bottom right */
+        .chart-type-toggle {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1001;
+            background: rgba(245, 240, 230, 0.95);
+            border: 1px solid #e3dccb;
+            border-radius: 50%;
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+        
+        .chart-type-toggle:hover {
+            background: rgba(245, 240, 230, 1);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            transform: scale(1.05);
+        }
+        
+        .chart-type-toggle svg {
+            width: 24px;
+            height: 24px;
+            fill: #6b665e;
+        }
+        
+        .chart-type-menu {
+            position: fixed;
+            bottom: 80px;
+            right: 20px;
+            z-index: 1002;
+            background: rgba(245, 240, 230, 0.98);
+            border: 1px solid #e3dccb;
+            border-radius: 8px;
+            padding: 12px;
+            min-width: 160px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            backdrop-filter: blur(10px);
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(10px);
+            transition: all 0.3s ease;
+        }
+        
+        .chart-type-menu.visible {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+        
+        .chart-type-menu-item {
+            padding: 8px 12px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            color: #2b2b2b;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .chart-type-menu-item:hover {
+            background: rgba(227, 220, 203, 0.5);
+        }
+        
+        .chart-type-menu-item.active {
+            background: rgba(227, 220, 203, 0.7);
+            font-weight: 500;
+        }
+        
+        .chart-type-menu-item .check {
+            opacity: 0;
+            transition: opacity 0.2s;
+            margin-left: 8px;
+        }
+        
+        .chart-type-menu-item.active .check {
+            opacity: 1;
+        }
+        
+        @media (max-width: 768px) {
+            .chart-type-toggle {
+                bottom: 15px;
+                right: 15px;
+                width: 44px;
+                height: 44px;
+            }
+            
+            .chart-type-menu {
+                bottom: 70px;
+                right: 15px;
+                min-width: 140px;
+            }
+            
+            .header {
+                padding-bottom: 50px; /* Add space for nav link on mobile */
+            }
+            
+            .header-nav {
+                position: static;
+                transform: none;
+                top: auto;
+                right: auto;
+                justify-content: center;
+                margin-top: 15px;
+                width: 100%;
+            }
+            
+            .nav-link {
+                font-size: 0.8rem;
+                padding: 6px 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="header-title">
+                    <h1 class="title">SWAC Publication History</h1>
+                    <p class="subtitle">Data-Driven Story (1978-2025)</p>
+                </div>
+                <div class="header-nav">
+                    <a href="index.html" class="nav-link">← Back to Visualization</a>
+                </div>
+            </div>
+        </header>
+
+        <!-- Scrollytelling Container -->
+        <div class="scrollytelling-container">
+            <!-- Fixed Visualization Area -->
+            <div class="visualization-sticky">
+                <div class="year-indicator" id="year-indicator"></div>
+                <div id="viz-container" class="loading">
+                    Loading data...
+                </div>
+            </div>
+
+            <!-- Scrollable Text Sections -->
+            <div class="scroll-sections" id="scroll-sections">
+                <!-- Steps will be generated dynamically -->
+            </div>
+        </div>
+        
+        <!-- Chart Type Toggle - Floating Button -->
+        <div class="chart-type-toggle" id="chart-type-toggle" title="Change chart type">
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/>
+            </svg>
+        </div>
+        
+        <!-- Chart Type Menu -->
+        <div class="chart-type-menu" id="chart-type-menu">
+            <div class="chart-type-menu-item active" data-type="stream">
+                <span>Theme River</span>
+                <span class="check">✓</span>
+            </div>
+            <div class="chart-type-menu-item" data-type="bar">
+                <span>Bar Chart</span>
+                <span class="check">✓</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Libraries -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://unpkg.com/scrollama@3.2.0/build/scrollama.min.js"></script>
+    
+    <!-- Data and Configuration -->
+    <script src="storytelling-data.js"></script>
+    
+    <!-- Visualization -->
+    <script src="app.js"></script>
+    
+    <!-- Scrollytelling Logic -->
+    <script src="storytelling.js"></script>
+</body>
+</html>
