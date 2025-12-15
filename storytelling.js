@@ -500,14 +500,90 @@ function updateVisualization(stepData) {
         currentViz.filterYearRange = null;
     }
     
+    // Handle highlights before updating visualization
+    // For series lifecycle steps, only show the highlighted series
+    if (vizConfig.action === 'showSeriesLifecycle' && vizConfig.highlights && vizConfig.highlights.length > 0) {
+        // Set selectedCategories to only show the highlighted series
+        currentViz.selectedCategories.clear();
+        vizConfig.highlights.forEach(seriesName => {
+            currentViz.selectedCategories.add(seriesName);
+        });
+    } else if (vizConfig.action === 'compareSeries' && vizConfig.highlights && vizConfig.highlights.length > 0) {
+        // For compare action, show multiple series by selecting them
+        currentViz.selectedCategories.clear();
+        vizConfig.highlights.forEach(seriesName => {
+            currentViz.selectedCategories.add(seriesName);
+        });
+    } else if (vizConfig.action === 'highlightSeries' && vizConfig.highlights && vizConfig.highlights.length > 0) {
+        // For highlight action, just set selectedStreamKey for highlighting (don't filter)
+        // We'll handle this after visualization update
+        currentViz.selectedCategories.clear();
+    } else {
+        // Clear selections for other steps
+        currentViz.selectedCategories.clear();
+        currentViz.selectedStreamKey = null;
+    }
+    
     // Update visualization (this will use filterYearRange to filter data and set xScale domain)
     currentViz.updateVisualization();
     
-    // Highlight specific elements
-    if (vizConfig.highlights && vizConfig.highlights.length > 0) {
-        // Highlight logic would go here
-        // This depends on how the visualization class handles highlights
-    }
+    // Apply highlight styling after visualization is updated
+    setTimeout(() => {
+        const chartType = currentViz.chartType;
+        
+        if (vizConfig.highlights && vizConfig.highlights.length > 0 && vizConfig.action === 'highlightSeries') {
+            // Highlight specific series by setting opacity (for highlightSeries action)
+            if (chartType === 'stream') {
+                // For stream graph, modify opacity of stream areas
+                currentViz.g.selectAll('.stream-area')
+                    .each(function(d) {
+                        const streamKey = d.key;
+                        const shouldHighlight = vizConfig.highlights.includes(streamKey);
+                        d3.select(this)
+                            .transition()
+                            .duration(300)
+                            .attr('opacity', shouldHighlight ? 1 : 0.2)
+                            .attr('stroke-width', shouldHighlight ? 2 : 0.5);
+                    });
+            } else if (chartType === 'bar') {
+                // For bar chart, modify opacity of bars
+                currentViz.g.selectAll('.bar')
+                    .each(function(d) {
+                        const streamKey = d.key;
+                        const shouldHighlight = vizConfig.highlights.includes(streamKey);
+                        d3.select(this)
+                            .transition()
+                            .duration(300)
+                            .attr('opacity', shouldHighlight ? 1 : 0.2);
+                    });
+            }
+        } else {
+            // Reset all highlights - use normal opacity based on selectedCategories
+            if (chartType === 'stream') {
+                currentViz.g.selectAll('.stream-area')
+                    .transition()
+                    .duration(300)
+                    .attr('opacity', d => {
+                        // If categories are selected, dim unselected ones
+                        if (currentViz.selectedCategories.size > 0 && !currentViz.selectedCategories.has(d.key)) {
+                            return 0.3;
+                        }
+                        return d.key === currentViz.selectedStreamKey ? 1 : 0.85;
+                    })
+                    .attr('stroke-width', d => d.key === currentViz.selectedStreamKey ? 2.5 : 0.5);
+            } else if (chartType === 'bar') {
+                currentViz.g.selectAll('.bar')
+                    .transition()
+                    .duration(300)
+                    .attr('opacity', d => {
+                        if (currentViz.selectedCategories.size > 0 && !currentViz.selectedCategories.has(d.key)) {
+                            return 0.3;
+                        }
+                        return d.key === currentViz.selectedStreamKey ? 1 : 0.85;
+                    });
+            }
+        }
+    }, 100);
 }
 
 // Update year indicator

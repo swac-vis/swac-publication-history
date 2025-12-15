@@ -18,6 +18,24 @@ def create_comprehensive_json():
     cleaned = cleaned.dropna(subset=['Year'])
     cleaned['Year'] = cleaned['Year'].astype(int)
     
+    # 过滤条件：只保留 status = 'published' 的记录
+    if 'status' in cleaned.columns:
+        cleaned = cleaned[cleaned['status'] == 'published'].copy()
+        print(f"过滤后（status=published）: {len(cleaned)} 条记录")
+    
+    # 过滤条件：只保留指定的文档类型
+    allowed_types = ['academic article', 'annual report', 'book', 'report']
+    if 'Type of document' in cleaned.columns:
+        # 处理可能的空值
+        cleaned = cleaned[cleaned['Type of document'].notna()].copy()
+        # 创建小写版本用于匹配，但保留原始值
+        cleaned['Type of document_lower'] = cleaned['Type of document'].str.strip().str.lower()
+        # 过滤：只保留允许的类型（不区分大小写）
+        cleaned = cleaned[cleaned['Type of document_lower'].isin([t.lower() for t in allowed_types])].copy()
+        # 删除临时列
+        cleaned = cleaned.drop(columns=['Type of document_lower'])
+        print(f"过滤后（指定文档类型）: {len(cleaned)} 条记录")
+    
     # 定义主题映射
     topic_mapping = {
         'PERSP/cross': 'Perspective/Cross-cutting',

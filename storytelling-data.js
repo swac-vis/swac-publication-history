@@ -24,7 +24,7 @@ const storytellingConfig = {
     {
       step: 1,
       section: 'temporal',
-      title: 'Publication Volume: 1978-1990',
+      title: 'Early Years: 1978-1990',
       visualization: {
         type: 'streamgraph',
         dimension: 'yearly',
@@ -38,12 +38,12 @@ const storytellingConfig = {
     {
       step: 2,
       section: 'temporal',
-      title: 'Publication Volume: 1991-2000',
+      title: 'Growth Period: 1991-2000',
       visualization: {
         type: 'streamgraph',
         dimension: 'yearly',
         yearRange: [1991, 2000],
-        highlights: [],
+        highlights: [], // Will highlight peak years 1998, 1999, 2000
         action: 'highlightYear'
       },
       dataPoints: ['period', 'total', 'average', 'peakYear', 'peakCount', 'significantIncrease']
@@ -51,53 +51,40 @@ const storytellingConfig = {
     {
       step: 3,
       section: 'temporal',
-      title: 'Publication Volume: 2001-2010',
+      title: 'Peak Years: 2001-2010',
       visualization: {
-        type: 'barchart',
+        type: 'streamgraph',
         dimension: 'yearly',
         yearRange: [2001, 2010],
-        highlights: [],
-        action: 'highlightPeakYear'
+        highlights: [], // Will highlight 2003 as peak year (42 publications)
+        action: 'highlightYear'
       },
       dataPoints: ['period', 'total', 'average', 'peakYear', 'peakCount', 'significantIncrease']
     },
     {
       step: 4,
       section: 'temporal',
-      title: 'Publication Volume: 2011-2020',
-      visualization: {
-        type: 'barchart',
-        dimension: 'yearly',
-        yearRange: [2011, 2020],
-        highlights: [],
-        action: 'highlightPeakYear'
-      },
-      dataPoints: ['period', 'total', 'average', 'peakYear', 'peakCount']
-    },
-    {
-      step: 5,
-      section: 'temporal',
-      title: 'Publication Volume: 2021-2025',
+      title: 'Recent Years: 2011-2025',
       visualization: {
         type: 'streamgraph',
         dimension: 'yearly',
-        yearRange: [2021, 2025],
+        yearRange: [2011, 2025],
         highlights: [],
-        action: 'showRecent'
+        action: 'highlightYear'
       },
-      dataPoints: ['period', 'total', 'average']
+      dataPoints: ['period', 'total', 'average', 'peakYear', 'peakCount']
     },
 
     // ========== SECTION 3: TOPIC DIMENSION - Dominance and Transitions ==========
     {
       step: 6,
       section: 'topics',
-      title: 'Topic Distribution: 1978-1982',
+      title: 'Early Focus: Food Security (1978-1990)',
       visualization: {
         type: 'streamgraph',
         dimension: 'topics',
-        yearRange: [1978, 1982],
-        highlights: [], // Will be calculated: dominant topic
+        yearRange: [1978, 1990],
+        highlights: [], // Will be calculated: Food as dominant topic
         action: 'highlightDominantTopic'
       },
       // Data points will be calculated: period, dominantTopic, dominantPercentage, topTopics
@@ -106,51 +93,51 @@ const storytellingConfig = {
     {
       step: 7,
       section: 'topics',
-      title: 'Topic Distribution: 1998-2002',
+      title: 'Transition Period: 1990s',
       visualization: {
         type: 'streamgraph',
         dimension: 'topics',
-        yearRange: [1998, 2002],
-        highlights: [], // Will be calculated: top 2-3 topics
-        action: 'highlightTransition'
+        yearRange: [1991, 2000],
+        highlights: [], // Will show Food still dominant but transition starting
+        action: 'highlightMultipleTopics'
       },
       dataPoints: ['period', 'dominantTopic', 'dominantPercentage', 'topTopics', 'transition']
     },
     {
       step: 8,
       section: 'topics',
-      title: 'Topic Distribution: 2003-2007',
+      title: 'Shift to Economy: 2000s',
       visualization: {
         type: 'streamgraph',
         dimension: 'topics',
-        yearRange: [2003, 2007],
-        highlights: [],
-        action: 'highlightMultipleTopics'
+        yearRange: [2001, 2010],
+        highlights: [], // Will highlight Economy as new dominant topic
+        action: 'highlightTransition'
       },
       dataPoints: ['period', 'dominantTopic', 'dominantPercentage', 'topTopics', 'transition']
     },
     {
       step: 9,
       section: 'topics',
-      title: 'Topic Distribution: 2018-2022',
+      title: 'Recent Focus: 2010s-2020s',
       visualization: {
         type: 'streamgraph',
         dimension: 'topics',
-        yearRange: [2018, 2022],
-        highlights: [],
-        action: 'highlightDominantTopic'
+        yearRange: [2011, 2025],
+        highlights: [], // Will show Internal and Security as emerging topics
+        action: 'highlightMultipleTopics'
       },
-      dataPoints: ['period', 'dominantTopic', 'dominantPercentage', 'topTopics', 'transition']
+      dataPoints: ['period', 'dominantTopic', 'dominantPercentage', 'topTopics']
     },
     {
       step: 10,
       section: 'topics',
-      title: 'Topic Dominance by Decade',
+      title: 'Topic Evolution by Decade',
       visualization: {
         type: 'evolution',
         dimension: 'topics',
         yearRange: null, // All years
-        highlights: [], // Will be calculated: Food, Economy, Urban
+        highlights: [], // Will be calculated: Food → Economy → Internal → Security
         action: 'showTopicEvolution'
       },
       dataPoints: ['decades']
@@ -160,59 +147,59 @@ const storytellingConfig = {
     {
       step: 11,
       section: 'series',
-      title: 'Series: ECOLOC',
+      title: 'Series: Document du CSAO',
       visualization: {
         type: 'timeline',
         dimension: 'series',
         yearRange: null, // Will be calculated from series data
-        highlights: ['ECOLOC'],
+        highlights: ['Document du CSAO'],
         action: 'showSeriesLifecycle'
       },
       // Data points will be calculated: series, launchYear, endYear, total, yearsActive, averagePerYear
       dataPoints: ['series', 'launchYear', 'endYear', 'total', 'yearsActive', 'averagePerYear'],
-      seriesName: 'ECOLOC'
+      seriesName: 'Document du CSAO'
     },
     {
       step: 12,
       section: 'series',
-      title: 'Series: West Africa Brief',
+      title: 'Series: Compte Rendu',
       visualization: {
         type: 'timeline',
         dimension: 'series',
         yearRange: null,
-        highlights: ['West Africa Brief'],
+        highlights: ['Compte Rendu'],
         action: 'showSeriesLifecycle'
       },
       dataPoints: ['series', 'launchYear', 'endYear', 'total', 'yearsActive', 'averagePerYear'],
-      seriesName: 'West Africa Brief'
+      seriesName: 'Compte Rendu'
     },
     {
       step: 13,
       section: 'series',
-      title: 'Series: Maps and Facts',
+      title: 'Series: ECOLOC',
       visualization: {
         type: 'timeline',
         dimension: 'series',
         yearRange: null,
-        highlights: ['Maps and Facts'],
+        highlights: ['ECOLOC'],
         action: 'showSeriesLifecycle'
       },
       dataPoints: ['series', 'launchYear', 'endYear', 'total', 'yearsActive', 'averagePerYear'],
-      seriesName: 'Maps and Facts'
+      seriesName: 'ECOLOC'
     },
     {
       step: 14,
       section: 'series',
-      title: 'Series: Africapolis',
+      title: 'Series: West African Studies',
       visualization: {
         type: 'streamgraph',
         dimension: 'series',
-        yearRange: [2011, 2020], // Context years around series
-        highlights: ['Africapolis'],
-        action: 'highlightSeries'
+        yearRange: null, // Will be calculated from series data
+        highlights: ['West African Studies / Cahiers de l\'Afrique'],
+        action: 'showSeriesLifecycle'
       },
       dataPoints: ['series', 'launchYear', 'endYear', 'total', 'yearsActive', 'averagePerYear'],
-      seriesName: 'Africapolis'
+      seriesName: 'West African Studies / Cahiers de l\'Afrique'
     },
     {
       step: 15,
@@ -233,33 +220,20 @@ const storytellingConfig = {
     {
       step: 16,
       section: 'types',
-      title: 'Document Type: 1970s-1980s',
+      title: 'Document Types: Report Dominance',
       visualization: {
         type: 'streamgraph',
         dimension: 'type',
-        yearRange: [1978, 1990],
-        highlights: [], // Will be calculated: dominant type
+        yearRange: null, // All years
+        highlights: [], // Will be calculated: Report as dominant type
         action: 'highlightType'
       },
       dataPoints: ['period', 'dominantType', 'typeDistribution']
     },
-    {
-      step: 17,
-      section: 'types',
-      title: 'Document Type: 1990s-2020s',
-      visualization: {
-        type: 'streamgraph',
-        dimension: 'type',
-        yearRange: [1991, 2025],
-        highlights: [], // Will be calculated: Report type
-        action: 'highlightType'
-      },
-      dataPoints: ['period', 'dominantType', 'typeDistributionByDecade']
-    },
 
     // ========== SECTION 6: STATISTICAL SUMMARY ==========
     {
-      step: 18,
+      step: 17,
       section: 'summary',
       title: 'Statistical Summary',
       visualization: {
@@ -288,9 +262,22 @@ class StoryDataCalculator {
     const calculatedData = {};
 
     // Calculate data points based on step configuration
+    // First, handle series data if seriesName is specified (so total can use series-specific count)
+    if (stepConfig.seriesName && stepConfig.dataPoints.includes('series')) {
+      const seriesData = this.calculateSeriesData(stepConfig.seriesName);
+      if (seriesData) {
+        Object.assign(calculatedData, seriesData);
+      }
+    }
+    
     stepConfig.dataPoints.forEach(dataPoint => {
       switch (dataPoint) {
         case 'total':
+          // If this is a series-specific step, use the series total (already calculated above)
+          if (stepConfig.seriesName && calculatedData.total !== undefined) {
+            // total already set from series data, skip
+            break;
+          }
           calculatedData.total = this.calculateTotal(stepConfig.visualization?.yearRange);
           break;
         case 'years':
@@ -332,9 +319,13 @@ class StoryDataCalculator {
           calculatedData.decades = this.calculateDecadeDominance();
           break;
         case 'series':
-          if (stepConfig.seriesName) {
+          // Series data already calculated above if seriesName exists
+          // This case is kept for compatibility but data should already be set
+          if (stepConfig.seriesName && !calculatedData.series) {
             const seriesData = this.calculateSeriesData(stepConfig.seriesName);
-            Object.assign(calculatedData, seriesData);
+            if (seriesData) {
+              Object.assign(calculatedData, seriesData);
+            }
           }
           break;
         case 'launchYear':

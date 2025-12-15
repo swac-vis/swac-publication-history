@@ -401,10 +401,12 @@ class SWACVisualization {
             valueCounts[val] = total;
         });
         
-        // Get top 12 values for better visualization
+        // Get top 20 values for better visualization (increased from 12 to capture more series/topics)
+        // This helps ensure years like 2011 are properly represented even if their main series aren't in top 12
+        // West African Futures Working Papers (rank 16) needs at least 16, so we use 20 for safety
         const allTopValues = dimensionValues
             .sort((a, b) => valueCounts[b] - valueCounts[a])
-            .slice(0, 12);
+            .slice(0, 20);
         
         // Filter based on selected categories
         let topValues = allTopValues;
@@ -412,11 +414,12 @@ class SWACVisualization {
             topValues = topValues.filter(val => this.selectedCategories.has(val));
         }
         
-        // Create stacked data
+        // Create stacked data - ensure all years have data points with correct values
         const stackedData = years.map(year => {
             const result = {year: year};
             topValues.forEach(val => {
-                result[val] = valuesByYear[year][val] || 0;
+                // Explicitly set to 0 if undefined to ensure all years have all values
+                result[val] = (valuesByYear[year] && valuesByYear[year][val]) ? valuesByYear[year][val] : 0;
             });
             return result;
         });
@@ -808,12 +811,14 @@ class SWACVisualization {
         this.g.selectAll('.bar-group').remove();
         this.g.selectAll('.bar').remove();
         this.g.selectAll('.bar-label').remove();
+        this.g.selectAll('.bar-keyword').remove();
         
         // Also remove from SVG container directly as a safety measure
         if (this.svg) {
             this.svg.selectAll('.bar-group').remove();
             this.svg.selectAll('.bar').remove();
             this.svg.selectAll('.bar-label').remove();
+            this.svg.selectAll('.bar-keyword').remove();
             this.svg.selectAll('.stream-area').remove();
             this.svg.selectAll('.stream-label').remove();
             this.svg.selectAll('.stream-keyword').remove();
@@ -881,18 +886,30 @@ class SWACVisualization {
                 const mouseX = event.clientX - rect.left; // rect is already for the translated <g>
                 const invertedYear = Math.round(this.xScale.invert(mouseX));
                 
-                // Find the closest data point
+                // Adjust for time axis offset: subtract 1 year to match visual alignment
+                // (e.g., if mouse is at 2004 position, we want to show 2003 data)
+                const adjustedYear = invertedYear - 1;
+                
+                // Clamp adjustedYear to valid range
+                const yearRange = this.filterYearRange 
+                    ? { min: this.filterYearRange[0], max: this.filterYearRange[1] }
+                    : this.data.metadata.year_range;
+                const clampedYear = Math.max(yearRange.min, Math.min(yearRange.max, adjustedYear));
+                
+                // Find the closest data point - ensure we use the actual year from the data point
                 let closestPoint = d[0];
                 let minDistance = Infinity;
                 d.forEach(point => {
-                    const distance = Math.abs(point.data.year - invertedYear);
+                    // Use the actual year from point.data.year, not invertedYear
+                    const pointYear = point.data.year;
+                    const distance = Math.abs(pointYear - clampedYear);
                     if (distance < minDistance) {
                         minDistance = distance;
                         closestPoint = point;
                     }
                 });
                 
-                // Cache the hover year for double click
+                // Cache the hover year for double click - use the actual year from closestPoint
                 this.hoverYear = closestPoint.data.year;
                 
                 // Do not update corner indicator on hover (playback only)
@@ -1095,24 +1112,40 @@ class SWACVisualization {
         const {stackedData, topValues} = this.prepareData();
         const events = [];
         
-        // Calculate total publications per year
+        // Calculate total publications per year from ORIGINAL data (not filtered by dimension)
+        // This ensures accurate peak detection regardless of current dimension/view
         const yearlyTotals = {};
-        stackedData.forEach(d => {
-            yearlyTotals[d.year] = topValues.reduce((sum, key) => sum + (d[key] || 0), 0);
+        const yearRange = this.filterYearRange 
+            ? { min: this.filterYearRange[0], max: this.filterYearRange[1] }
+            : this.data.metadata.year_range;
+        
+        // Use original publications data, only filter by year range if specified
+        const publicationsToCount = this.filterYearRange
+            ? this.data.publications.filter(pub => 
+                pub.year >= this.filterYearRange[0] && pub.year <= this.filterYearRange[1]
+            )
+            : this.data.publications;
+        
+        publicationsToCount.forEach(pub => {
+            const year = pub.year;
+            yearlyTotals[year] = (yearlyTotals[year] || 0) + 1;
         });
         
         const years = Object.keys(yearlyTotals).map(Number).sort((a, b) => a - b);
         const values = years.map(y => yearlyTotals[y]);
         
         // Detect peaks (local maxima)
+        // Adjusted thresholds for filtered data (329 publications vs 1043)
         for (let i = 1; i < values.length - 1; i++) {
-            if (values[i] > values[i-1] && values[i] > values[i+1] && values[i] > 20) {
+            if (values[i] > values[i-1] && values[i] > values[i+1] && values[i] > 10) {
                 const totalIncrease = values[i] / Math.max(values[i-1], 1) - 1;
-                if (totalIncrease > 0.3) { // 30% increase
+                // Lower threshold for significant increase (25% instead of 30%)
+                // to capture key years like 1998 (+288%), 2003 (+740%)
+                if (totalIncrease > 0.25 || values[i] >= 30) { // 25% increase OR 30+ publications
                     events.push({
                         year: years[i],
                         type: 'peak',
-                        message: `Peak year: ${values[i]} publications (+${Math.round(totalIncrease * 100)}%)`,
+                        message: `Peak year: ${values[i]} publications${totalIncrease > 0 ? ` (+${Math.round(totalIncrease * 100)}%)` : ''}`,
                         value: values[i]
                     });
                 }
@@ -1197,7 +1230,8 @@ class SWACVisualization {
             const v = vectorForYear(y);
             const sim = cosine(vPrev, v);
             const shift = 1 - sim; // 0~1
-            if (shift > 0.35) { // notable shift
+            // Adjusted threshold for filtered data - detect topic shifts (Food→Economy transition)
+            if (shift > 0.30) { // notable shift (lowered from 0.35 to 0.30)
                 // Extract top keywords (titles) for the year for context
                 const pubs = (pby[y] || []).slice(0, 50);
                 const kw = this.extractKeywordCountsFromTitles(pubs).sorted
@@ -1578,12 +1612,14 @@ class SWACVisualization {
         this.g.selectAll('.bar-group').remove();
         this.g.selectAll('.bar').remove();
         this.g.selectAll('.bar-label').remove();
+        this.g.selectAll('.bar-keyword').remove();
         
         // Also remove from SVG container directly as a safety measure
         if (this.svg) {
             this.svg.selectAll('.bar-group').remove();
             this.svg.selectAll('.bar').remove();
             this.svg.selectAll('.bar-label').remove();
+            this.svg.selectAll('.bar-keyword').remove();
             this.svg.selectAll('.stream-area').remove();
             this.svg.selectAll('.stream-label').remove();
             this.svg.selectAll('.stream-keyword').remove();
@@ -1898,8 +1934,12 @@ class SWACVisualization {
             this.animationYMax = null; // Reset Y scale
             this.animationYMin = null;
             
-            // First, create full graph without clipPath
-            this.createStreamGraph();
+            // First, create full graph without clipPath based on chart type
+            if (this.chartType === 'bar') {
+                this.createBarChart();
+            } else {
+                this.createStreamGraph();
+            }
             this.addAxes();
             
             // Then apply clipPath and start animation
@@ -1917,8 +1957,12 @@ class SWACVisualization {
         const yearRange = this.data.metadata.year_range;
         const years = d3.range(yearRange.min, this.currentYear + 1);
         
-        // Create a masked version of the visualization
-        this.createAnimatedStreamGraph(years);
+        // Create a masked version of the visualization based on chart type
+        if (this.chartType === 'bar') {
+            this.createAnimatedBarChart(years);
+        } else {
+            this.createAnimatedStreamGraph(years);
+        }
         
         // Update corner year indicator during playback
         this.updateYearIndicator(this.currentYear);
@@ -1957,6 +2001,30 @@ class SWACVisualization {
         
         // Remove playback narrative per request (no popup)
         // this.showNarrative(`Playing: ${this.currentYear}`, `Showing ${yearsToShow.length} years of history`);
+    }
+    
+    createAnimatedBarChart(yearsToShow) {
+        // For bar charts, calculate clip width based on the last visible bar
+        const maxYear = Math.max(...yearsToShow);
+        
+        // Use the existing xScale (already set up by createBarChart)
+        if (this.xScale && this.xScale.bandwidth) {
+            // For scaleBand, calculate the right edge of the bar for maxYear
+            const barX = this.xScale(maxYear);
+            const barWidth = this.xScale.bandwidth();
+            
+            // If the year is in the domain, calculate clip position
+            if (barX !== undefined && !isNaN(barX)) {
+                const clipX = this.margin.left + barX + barWidth;
+                
+                // Update clip path width with smooth transition
+                this.clipPathGroup.select('rect')
+                    .transition()
+                    .duration(50)
+                    .ease(d3.easeLinear)
+                    .attr('width', clipX);
+            }
+        }
     }
 
     updateYearIndicator(year) {
